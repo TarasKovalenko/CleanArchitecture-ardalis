@@ -1,100 +1,96 @@
-﻿using Ardalis.ListStartupServices;
-using Autofac;
-using Autofac.Extensions.DependencyInjection;
-using Clean.Architecture.Core;
+﻿using System.Reflection;
+using Ardalis.ListStartupServices;
+using Ardalis.SharedKernel;
+using Clean.Architecture.Core.ContributorAggregate;
+using Clean.Architecture.Core.Interfaces;
 using Clean.Architecture.Infrastructure;
 using Clean.Architecture.Infrastructure.Data;
-using Clean.Architecture.Web;
+using Clean.Architecture.Infrastructure.Email;
+using Clean.Architecture.UseCases.Contributors.Create;
 using FastEndpoints;
-using FastEndpoints.Swagger.Swashbuckle;
-using FastEndpoints.ApiExplorer;
-using Microsoft.OpenApi.Models;
+using FastEndpoints.Swagger;
+using MediatR;
 using Serilog;
+using Serilog.Extensions.Logging;
+
+var logger = Log.Logger = new LoggerConfiguration()
+  .Enrich.FromLogContext()
+  .WriteTo.Console()
+  .CreateLogger();
+
+logger.Information("Starting web host");
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
-
 builder.Host.UseSerilog((_, config) => config.ReadFrom.Configuration(builder.Configuration));
+var microsoftLogger = new SerilogLoggerFactory(logger)
+    .CreateLogger<Program>();
 
+// Configure Web Behavior
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {
   options.CheckConsentNeeded = context => true;
   options.MinimumSameSitePolicy = SameSiteMode.None;
 });
 
-string? connectionString = builder.Configuration.GetConnectionString("SqliteConnection");  //Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddFastEndpoints()
+                .SwaggerDocument(o =>
+                {
+                  o.ShortSchemaNames = true;
+                });
 
-builder.Services.AddDbContext(connectionString!);
+ConfigureMediatR();
 
-builder.Services.AddControllersWithViews().AddNewtonsoftJson();
-builder.Services.AddRazorPages();
-builder.Services.AddFastEndpoints();
-builder.Services.AddFastEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddInfrastructureServices(builder.Configuration, microsoftLogger);
+
+if (builder.Environment.IsDevelopment())
 {
-  c.SwaggerDoc("v1", new OpenApiInfo { Title = "My API", Version = "v1" });
-  c.EnableAnnotations();
-  c.OperationFilter<FastEndpointsOperationFilter>();
-});
+  // Use a local test email server
+  // See: https://ardalis.com/configuring-a-local-test-email-server/
+  builder.Services.AddScoped<IEmailSender, MimeKitEmailSender>();
 
-// add list services for diagnostic purposes - see https://github.com/ardalis/AspNetCoreStartupServices
-builder.Services.Configure<ServiceConfig>(config =>
+  // Otherwise use this:
+  //builder.Services.AddScoped<IEmailSender, FakeEmailSender>();
+  AddShowAllServicesSupport();
+}
+else
 {
-  config.Services = new List<ServiceDescriptor>(builder.Services);
-
-  // optional - default path to view services is /listallservices - recommended to choose your own path
-  config.Path = "/listservices";
-});
-
-
-builder.Host.ConfigureContainer<ContainerBuilder>(containerBuilder =>
-{
-  containerBuilder.RegisterModule(new DefaultCoreModule());
-  containerBuilder.RegisterModule(new DefaultInfrastructureModule(builder.Environment.EnvironmentName == "Development"));
-});
-
-//builder.Logging.AddAzureWebAppDiagnostics(); add this if deploying to Azure
+  builder.Services.AddScoped<IEmailSender, MimeKitEmailSender>();
+}
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
   app.UseDeveloperExceptionPage();
-  app.UseShowAllServicesMiddleware();
+  app.UseShowAllServicesMiddleware(); // see https://github.com/ardalis/AspNetCoreStartupServices
 }
 else
 {
-  app.UseExceptionHandler("/Home/Error");
+  app.UseDefaultExceptionHandler(); // from FastEndpoints
   app.UseHsts();
 }
-app.UseRouting();
-app.UseFastEndpoints();
+
+app.UseFastEndpoints()
+    .UseSwaggerGen(); // Includes AddFileServer and static files middleware
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
-app.UseCookiePolicy();
 
-// Enable middleware to serve generated Swagger as a JSON endpoint.
-app.UseSwagger();
+await SeedDatabase(app);
 
-// Enable middleware to serve swagger-ui (HTML, JS, CSS, etc.), specifying the Swagger JSON endpoint.
-app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1"));
+app.Run();
 
-app.MapDefaultControllerRoute();
-app.MapRazorPages();
-
-// Seed Database
-using (var scope = app.Services.CreateScope())
+static async Task SeedDatabase(WebApplication app)
 {
+  using var scope = app.Services.CreateScope();
   var services = scope.ServiceProvider;
 
   try
   {
     var context = services.GetRequiredService<AppDbContext>();
-    //                    context.Database.Migrate();
+    //          context.Database.Migrate();
     context.Database.EnsureCreated();
-    SeedData.Initialize(services);
+    await SeedData.InitializeAsync(context);
   }
   catch (Exception ex)
   {
@@ -103,4 +99,31 @@ using (var scope = app.Services.CreateScope())
   }
 }
 
-app.Run();
+void ConfigureMediatR()
+{
+  var mediatRAssemblies = new[]
+{
+  Assembly.GetAssembly(typeof(Contributor)), // Core
+  Assembly.GetAssembly(typeof(CreateContributorCommand)) // UseCases
+};
+  builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblies(mediatRAssemblies!));
+  builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+  builder.Services.AddScoped<IDomainEventDispatcher, MediatRDomainEventDispatcher>();
+}
+
+void AddShowAllServicesSupport()
+{
+  // add list services for diagnostic purposes - see https://github.com/ardalis/AspNetCoreStartupServices
+  builder.Services.Configure<ServiceConfig>(config =>
+  {
+    config.Services = new List<ServiceDescriptor>(builder.Services);
+
+    // optional - default path to view services is /listallservices - recommended to choose your own path
+    config.Path = "/listservices";
+  });
+}
+
+// Make the implicit Program.cs class public, so integration tests can reference the correct assembly for host building
+public partial class Program
+{
+}

@@ -1,19 +1,14 @@
 ﻿using Ardalis.HttpClientTestExtensions;
-using Clean.Architecture.Web;
-using Clean.Architecture.Web.Endpoints.ContributorEndpoints;
+using Clean.Architecture.Infrastructure.Data;
+using Clean.Architecture.Web.Contributors;
 using Xunit;
 
 namespace Clean.Architecture.FunctionalTests.ApiEndpoints;
 
 [Collection("Sequential")]
-public class ContributorList : IClassFixture<CustomWebApplicationFactory<WebMarker>>
+public class ContributorList(CustomWebApplicationFactory<Program> factory) : IClassFixture<CustomWebApplicationFactory<Program>>
 {
-  private readonly HttpClient _client;
-
-  public ContributorList(CustomWebApplicationFactory<WebMarker> factory)
-  {
-    _client = factory.CreateClient();
-  }
+  private readonly HttpClient _client = factory.CreateClient();
 
   [Fact]
   public async Task ReturnsTwoContributors()

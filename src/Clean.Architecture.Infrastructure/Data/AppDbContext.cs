@@ -1,12 +1,9 @@
 ﻿using System.Reflection;
+using Ardalis.SharedKernel;
 using Clean.Architecture.Core.ContributorAggregate;
-using Clean.Architecture.Core.ProjectAggregate;
-using Clean.Architecture.SharedKernel;
-using Clean.Architecture.SharedKernel.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Clean.Architecture.Infrastructure.Data;
-
 public class AppDbContext : DbContext
 {
   private readonly IDomainEventDispatcher? _dispatcher;
@@ -18,9 +15,7 @@ public class AppDbContext : DbContext
     _dispatcher = dispatcher;
   }
 
-  public DbSet<ToDoItem> ToDoItems => Set<ToDoItem>();
-  public DbSet<Project> Projects => Set<Project>();
-  public DbSet<Contributor> Contributors => Set<Contributor>(); 
+  public DbSet<Contributor> Contributors => Set<Contributor>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
@@ -46,8 +41,6 @@ public class AppDbContext : DbContext
     return result;
   }
 
-  public override int SaveChanges()
-  {
-    return SaveChangesAsync().GetAwaiter().GetResult();
-  }
+  public override int SaveChanges() =>
+        SaveChangesAsync().GetAwaiter().GetResult();
 }

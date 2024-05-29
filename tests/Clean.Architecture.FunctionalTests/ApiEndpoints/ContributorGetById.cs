@@ -1,19 +1,14 @@
 ﻿using Ardalis.HttpClientTestExtensions;
-using Clean.Architecture.Web;
-using Clean.Architecture.Web.Endpoints.ContributorEndpoints;
+using Clean.Architecture.Infrastructure.Data;
+using Clean.Architecture.Web.Contributors;
 using Xunit;
 
 namespace Clean.Architecture.FunctionalTests.ApiEndpoints;
 
 [Collection("Sequential")]
-public class ContributorGetById : IClassFixture<CustomWebApplicationFactory<WebMarker>>
+public class ContributorGetById(CustomWebApplicationFactory<Program> factory) : IClassFixture<CustomWebApplicationFactory<Program>>
 {
-  private readonly HttpClient _client;
-
-  public ContributorGetById(CustomWebApplicationFactory<WebMarker> factory)
-  {
-    _client = factory.CreateClient();
-  }
+  private readonly HttpClient _client = factory.CreateClient();
 
   [Fact]
   public async Task ReturnsSeedContributorGivenId1()
@@ -25,9 +20,9 @@ public class ContributorGetById : IClassFixture<CustomWebApplicationFactory<WebM
   }
 
   [Fact]
-  public async Task ReturnsNotFoundGivenId0()
+  public async Task ReturnsNotFoundGivenId1000()
   {
-    string route = GetContributorByIdRequest.BuildRoute(0);
+    string route = GetContributorByIdRequest.BuildRoute(1000);
     _ = await _client.GetAndEnsureNotFoundAsync(route);
   }
 }

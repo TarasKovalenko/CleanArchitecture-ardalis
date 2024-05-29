@@ -1,26 +1,28 @@
-using Ardalis.Result;
+﻿using Ardalis.Result;
+using Ardalis.SharedKernel;
 using Clean.Architecture.Core.ContributorAggregate;
 using Clean.Architecture.Core.ContributorAggregate.Events;
 using Clean.Architecture.Core.Interfaces;
-using Clean.Architecture.SharedKernel.Interfaces;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Clean.Architecture.Core.Services;
 
-public class DeleteContributorService : IDeleteContributorService
+/// <summary>
+/// This is here mainly so there's an example of a domain service
+/// and also to demonstrate how to fire domain events from a service.
+/// </summary>
+/// <param name="_repository"></param>
+/// <param name="_mediator"></param>
+/// <param name="_logger"></param>
+public class DeleteContributorService(IRepository<Contributor> _repository,
+  IMediator _mediator,
+  ILogger<DeleteContributorService> _logger) : IDeleteContributorService
 {
-  private readonly IRepository<Contributor> _repository;
-  private readonly IMediator _mediator;
-
-  public DeleteContributorService(IRepository<Contributor> repository, IMediator mediator)
-  {
-    _repository = repository;
-    _mediator = mediator;
-  }
-
   public async Task<Result> DeleteContributor(int contributorId)
   {
-    var aggregateToDelete = await _repository.GetByIdAsync(contributorId);
+    _logger.LogInformation("Deleting Contributor {contributorId}", contributorId);
+    Contributor? aggregateToDelete = await _repository.GetByIdAsync(contributorId);
     if (aggregateToDelete == null) return Result.NotFound();
 
     await _repository.DeleteAsync(aggregateToDelete);
