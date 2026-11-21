@@ -1,7 +1,5 @@
-﻿using Ardalis.HttpClientTestExtensions;
-using Clean.Architecture.Infrastructure.Data;
+﻿using Clean.Architecture.Infrastructure.Data;
 using Clean.Architecture.Web.Contributors;
-using Xunit;
 
 namespace Clean.Architecture.FunctionalTests.ApiEndpoints;
 
@@ -15,8 +13,8 @@ public class ContributorList(CustomWebApplicationFactory<Program> factory) : ICl
   {
     var result = await _client.GetAndDeserializeAsync<ContributorListResponse>("/Contributors");
 
-    Assert.Equal(2, result.Contributors.Count);
-    Assert.Contains(result.Contributors, i => i.Name == SeedData.Contributor1.Name);
-    Assert.Contains(result.Contributors, i => i.Name == SeedData.Contributor2.Name);
+    result.TotalCount.ShouldBe(SeedData.NUMBER_OF_CONTRIBUTORS);
+    result.Items.ShouldContain(i => i.Name == SeedData.Contributor1Name.Value);
+    result.Items.ShouldContain(i => i.Name == SeedData.Contributor2Name.Value);
   }
 }
